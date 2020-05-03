@@ -262,7 +262,7 @@ class SamplerWorker(mp.Process):
                                                   device=device)
             train_episodes.log('_enqueueAt', datetime.now(timezone.utc))
             # QKFIX: Deep copy the episodes before sending them to their
-            # respective queues, to avoid a race condition. This issue would 
+            # respective queues, to avoid a race condition. This issue would
             # cause the policy pi = policy(observations) to be miscomputed for
             # some timesteps, which in turns makes the loss explode.
             self.train_queue.put((index, step, deepcopy(train_episodes)))
@@ -273,6 +273,7 @@ class SamplerWorker(mp.Process):
                                                    params=params,
                                                    step_size=fast_lr,
                                                    first_order=True)
+                #print('updated params=',params)
 
         # Sample the validation trajectories with the adapted policy
         valid_episodes = self.create_episodes(params=params,

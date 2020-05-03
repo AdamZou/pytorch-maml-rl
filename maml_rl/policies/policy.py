@@ -19,8 +19,8 @@ class Policy(nn.Module):
         self.meta_parameters = self.parameters
 
     def update_params(self, loss, params=None, step_size=0.5, first_order=False):
-        """Apply one step of gradient descent on the loss function `loss`, with 
-        step-size `step_size`, and returns the updated parameters of the neural 
+        """Apply one step of gradient descent on the loss function `loss`, with
+        step-size `step_size`, and returns the updated parameters of the neural
         network.
         """
         if params is None:

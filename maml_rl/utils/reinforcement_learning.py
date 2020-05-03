@@ -2,6 +2,8 @@ import numpy as np
 
 from maml_rl.utils.torch_utils import weighted_mean, to_numpy
 
+import arguments
+
 def value_iteration(transitions, rewards, gamma=0.95, theta=1e-5):
     rewards = np.expand_dims(rewards, axis=2)
     values = np.zeros(transitions.shape[0], dtype=np.float32)

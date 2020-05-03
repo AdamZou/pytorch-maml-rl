@@ -6,10 +6,12 @@ from torch.distributions.kl import kl_divergence
 from maml_rl.samplers import MultiTaskSampler
 from maml_rl.metalearners.base import GradientBasedMetaLearner
 from maml_rl.utils.torch_utils import (weighted_mean, detach_distribution,
-                                       to_numpy, vector_to_parameters)
+                                       to_numpy, vector_to_parameters, KL, stopgrad_params, deter_sigma, L2)
 from maml_rl.utils.optimization import conjugate_gradient
 from maml_rl.utils.reinforcement_learning import reinforce_loss
 
+from collections import OrderedDict
+import arguments
 
 class MAMLTRPO(GradientBasedMetaLearner):
     """Model-Agnostic Meta-Learning (MAML, [1]) for Reinforcement Learning
@@ -56,11 +58,11 @@ class MAMLTRPO(GradientBasedMetaLearner):
         self.fast_lr = fast_lr
         self.first_order = first_order
 
-    async def adapt(self, train_futures, first_order=None):
+    async def adapt(self, train_futures, first_order=None, params=None):
         if first_order is None:
             first_order = self.first_order
         # Loop over the number of steps of adaptation
-        params = None
+        #params = None
         for futures in train_futures:
             inner_loss = reinforce_loss(self.policy,
                                         await futures,
@@ -94,6 +96,7 @@ class MAMLTRPO(GradientBasedMetaLearner):
 
         with torch.set_grad_enabled(old_pi is None):
             valid_episodes = await valid_futures
+
             pi = self.policy(valid_episodes.observations, params=params)
 
             if old_pi is None:
@@ -103,10 +106,23 @@ class MAMLTRPO(GradientBasedMetaLearner):
                          - old_pi.log_prob(valid_episodes.actions))
             ratio = torch.exp(log_ratio)
 
-            losses = -weighted_mean(ratio * valid_episodes.advantages,
-                                    lengths=valid_episodes.lengths)
             kls = weighted_mean(kl_divergence(pi, old_pi),
                                 lengths=valid_episodes.lengths)
+            # params adapt from valid_futures
+            params_b = await self.adapt(valid_futures,first_order=first_order, params=params)
+            params_meta = OrderedDict(self.policy.named_parameters())
+            if arguments.args.deter_b:
+                params_b = deter_sigma(params_b)
+
+            # meta_loss
+            switcher={
+                'bq': KL(stopgrad_params(params_b),params_meta, self.policy.num_layers) ,
+                'abq': KL(stopgrad_params(params_b),params_meta, self.policy.num_layers) - KL(stopgrad_params(params),params_meta, self.policy.num_layers) ,
+                'reptile':  L2(stopgrad_params(params_b),params_meta, self.policy.num_layers) ,
+                'maml': -weighted_mean(ratio * valid_episodes.advantages,lengths=valid_episodes.lengths)
+            }
+
+            losses = switcher[arguments.args.meta_loss]
 
         return losses.mean(), kls.mean(), old_pi
 
@@ -136,42 +152,47 @@ class MAMLTRPO(GradientBasedMetaLearner):
         grads = parameters_to_vector(grads)
 
         # Compute the step direction with Conjugate Gradient
-        old_kl = sum(old_kls) / num_tasks
-        hessian_vector_product = self.hessian_vector_product(old_kl,
-                                                             damping=cg_damping)
-        stepdir = conjugate_gradient(hessian_vector_product,
-                                     grads,
-                                     cg_iters=cg_iters)
-
-        # Compute the Lagrange multiplier
-        shs = 0.5 * torch.dot(stepdir,
-                              hessian_vector_product(stepdir, retain_graph=False))
-        lagrange_multiplier = torch.sqrt(shs / max_kl)
-
-        step = stepdir / lagrange_multiplier
-
-        # Save the old parameters
-        old_params = parameters_to_vector(self.policy.parameters())
-
-        # Line search
-        step_size = 1.0
-        for _ in range(ls_max_steps):
-            vector_to_parameters(old_params - step_size * step,
+        if arguments.args.meta_loss != 'maml':
+            old_params = parameters_to_vector(self.policy.parameters())
+            vector_to_parameters(old_params - arguments.args.meta_lr * grads,
                                  self.policy.parameters())
-
-            losses, kls, _ = self._async_gather([
-                self.surrogate_loss(train, valid, old_pi=old_pi)
-                for (train, valid, old_pi)
-                in zip(zip(*train_futures), valid_futures, old_pis)])
-
-            improve = (sum(losses) / num_tasks) - old_loss
-            kl = sum(kls) / num_tasks
-            if (improve.item() < 0.0) and (kl.item() < max_kl):
-                logs['loss_after'] = to_numpy(losses)
-                logs['kl_after'] = to_numpy(kls)
-                break
-            step_size *= ls_backtrack_ratio
         else:
-            vector_to_parameters(old_params, self.policy.parameters())
+            old_kl = sum(old_kls) / num_tasks
+            hessian_vector_product = self.hessian_vector_product(old_kl,
+                                                                 damping=cg_damping)
+            stepdir = conjugate_gradient(hessian_vector_product,
+                                         grads,
+                                         cg_iters=cg_iters)
+
+            # Compute the Lagrange multiplier
+            shs = 0.5 * torch.dot(stepdir,
+                                  hessian_vector_product(stepdir, retain_graph=False))
+            lagrange_multiplier = torch.sqrt(shs / max_kl)
+
+            step = stepdir / lagrange_multiplier
+
+            # Save the old parameters
+            old_params = parameters_to_vector(self.policy.parameters())
+
+            # Line search
+            step_size = 1.0
+            for _ in range(ls_max_steps):
+                vector_to_parameters(old_params - step_size * step,
+                                     self.policy.parameters())
+
+                losses, kls, _ = self._async_gather([
+                    self.surrogate_loss(train, valid, old_pi=old_pi)
+                    for (train, valid, old_pi)
+                    in zip(zip(*train_futures), valid_futures, old_pis)])
+
+                improve = (sum(losses) / num_tasks) - old_loss
+                kl = sum(kls) / num_tasks
+                if (improve.item() < 0.0) and (kl.item() < max_kl):
+                    logs['loss_after'] = to_numpy(losses)
+                    logs['kl_after'] = to_numpy(kls)
+                    break
+                step_size *= ls_backtrack_ratio
+            else:
+                vector_to_parameters(old_params, self.policy.parameters())
 
         return logs

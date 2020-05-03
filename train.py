@@ -4,6 +4,7 @@ import json
 import os
 import yaml
 from tqdm import trange
+import numpy as np
 
 import maml_rl.envs
 from maml_rl.metalearners import MAMLTRPO
@@ -60,13 +61,16 @@ def main(args):
 
     num_iterations = 0
     for batch in trange(config['num-batches']):
+    #for batch in range(config['num-batches']):
         tasks = sampler.sample_tasks(num_tasks=config['meta-batch-size'])
+        # inner-update
         futures = sampler.sample_async(tasks,
                                        num_steps=config['num-steps'],
                                        fast_lr=config['fast-lr'],
                                        gamma=config['gamma'],
                                        gae_lambda=config['gae-lambda'],
                                        device=args.device)
+        # meta-update
         logs = metalearner.step(*futures,
                                 max_kl=config['max-kl'],
                                 cg_iters=config['cg-iters'],
@@ -77,11 +81,20 @@ def main(args):
         train_episodes, valid_episodes = sampler.sample_wait(futures)
         num_iterations += sum(sum(episode.lengths) for episode in train_episodes[0])
         num_iterations += sum(sum(episode.lengths) for episode in valid_episodes)
+
+        train_returns=get_returns(train_episodes[0])
+        valid_returns=get_returns(valid_episodes)
         logs.update(tasks=tasks,
                     num_iterations=num_iterations,
-                    train_returns=get_returns(train_episodes[0]),
-                    valid_returns=get_returns(valid_episodes))
+                    train_returns=train_returns,
+                    valid_returns=valid_returns)
 
+        print('batch=',batch)
+        #print('tasks=',tasks)
+        print('train_returns=',np.mean(train_returns,axis=0), np.mean(train_returns))
+        print('valid_returns=',np.mean(valid_returns,axis=0), np.mean(valid_returns))
+
+        #print(logs)
         # Save policy
         if args.output_folder is not None:
             with open(policy_filename, 'wb') as f:
@@ -89,30 +102,6 @@ def main(args):
 
 
 if __name__ == '__main__':
-    import argparse
-    import multiprocessing as mp
-
-    parser = argparse.ArgumentParser(description='Reinforcement learning with '
-        'Model-Agnostic Meta-Learning (MAML) - Train')
-
-    parser.add_argument('--config', type=str, required=True,
-        help='path to the configuration file.')
-
-    # Miscellaneous
-    misc = parser.add_argument_group('Miscellaneous')
-    misc.add_argument('--output-folder', type=str,
-        help='name of the output folder')
-    misc.add_argument('--seed', type=int, default=None,
-        help='random seed')
-    misc.add_argument('--num-workers', type=int, default=mp.cpu_count() - 1,
-        help='number of workers for trajectories sampling (default: '
-             '{0})'.format(mp.cpu_count() - 1))
-    misc.add_argument('--use-cuda', action='store_true',
-        help='use cuda (default: false, use cpu). WARNING: Full upport for cuda '
-        'is not guaranteed. Using CPU is encouraged.')
-
-    args = parser.parse_args()
-    args.device = ('cuda' if (torch.cuda.is_available()
-                   and args.use_cuda) else 'cpu')
-
-    main(args)
+    import arguments
+    arguments.init()
+    main(arguments.args)

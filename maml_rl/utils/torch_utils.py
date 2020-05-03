@@ -4,6 +4,72 @@ import numpy as np
 from torch.distributions import Categorical, Independent, Normal
 from torch.nn.utils.convert_parameters import _check_param_device
 
+from torch.distributions import MultivariateNormal
+from torch.distributions.kl import kl_divergence
+from collections import OrderedDict
+import math
+
+
+
+
+
+def deter_sigma(params):
+    updated_params = OrderedDict()
+    for (name, param) in params.items():
+        if 'log_sigma' in name:
+            updated_params[name] = torch.log(torch.exp(param) * 1e-9)
+            #updated_params[name] = math.log( 1e-9)
+        else:
+            updated_params[name] = param
+
+    return updated_params
+
+
+def stopgrad_params(params):
+    updated_params = OrderedDict()
+    for (name, param) in params.items():
+        updated_params[name] = param.detach()
+
+    return updated_params
+
+
+def get_dist(weight_mu, weight_log_sigma, bias_mu, bias_log_sigma):
+
+    #weight = Independent(MultivariateNormal(loc=weight_mu, scale_tril=torch.diag_embed(torch.exp(weight_log_sigma))) ,1)
+    #bias = Independent(MultivariateNormal(loc=bias_mu, scale_tril=torch.diag(torch.exp(bias_log_sigma))) ,1)
+    weight = MultivariateNormal(loc=weight_mu, scale_tril=torch.diag_embed(torch.exp(weight_log_sigma)))
+    bias = MultivariateNormal(loc=bias_mu, scale_tril=torch.diag(torch.exp(bias_log_sigma)))
+
+    return weight, bias
+
+
+def KL(params_a,params_b,num_layers):
+
+    kl = 0
+    for i in range(1, num_layers):
+        params = params_a
+        weight_a, bias_a = get_dist(params['layer{0}.weight_mu'.format(i)], params['layer{0}.weight_log_sigma'.format(i)], params['layer{0}.bias_mu'.format(i)], params['layer{0}.bias_log_sigma'.format(i)])
+        params = params_b
+        weight_b, bias_b = get_dist(params['layer{0}.weight_mu'.format(i)], params['layer{0}.weight_log_sigma'.format(i)], params['layer{0}.bias_mu'.format(i)], params['layer{0}.bias_log_sigma'.format(i)])
+        kl += torch.sum(kl_divergence(weight_a,weight_b)) + torch.sum(kl_divergence(bias_a,bias_b))
+    params = params_a
+    weight_a, bias_a = get_dist(params['mu.weight_mu'], params['mu.weight_log_sigma'], params['mu.bias_mu'], params['mu.bias_log_sigma'])
+    params = params_b
+    weight_b, bias_b = get_dist(params['mu.weight_mu'], params['mu.weight_log_sigma'], params['mu.bias_mu'], params['mu.bias_log_sigma'])
+    kl += torch.sum(kl_divergence(weight_a,weight_b)) + torch.sum(kl_divergence(bias_a,bias_b))
+
+    return kl
+
+
+def L2(params_a,params_b,num_layers):
+
+    l2 = 0
+    for (name, param) in params_a.items():
+        l2 += torch.sum((params_a[name] - params_b[name]) ** 2)
+
+    return l2
+
+
 def weighted_mean(tensor, lengths=None):
     if lengths is None:
         return torch.mean(tensor)
