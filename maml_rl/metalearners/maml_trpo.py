@@ -8,7 +8,7 @@ from maml_rl.metalearners.base import GradientBasedMetaLearner
 from maml_rl.utils.torch_utils import (weighted_mean, detach_distribution,
                                        to_numpy, vector_to_parameters, KL, stopgrad_params, deter_sigma, L2)
 from maml_rl.utils.optimization import conjugate_gradient
-from maml_rl.utils.reinforcement_learning import reinforce_loss
+from maml_rl.utils.reinforcement_learning import reinforce_loss, trpo_update
 
 from collections import OrderedDict
 import arguments
@@ -73,6 +73,19 @@ class MAMLTRPO(GradientBasedMetaLearner):
                                                first_order=first_order)
         return params
 
+
+
+
+    async def trpo_adapt(self, train_futures, params):
+    #def trpo_adapt(self, train_futures, params):
+        # Loop over the number of steps of adaptation
+        #params = None
+        for futures in train_futures:
+            params = trpo_update(self.policy, params,await futures)
+            #params = trpo_update(self.policy, params,futures) ##
+        return params
+
+
     def hessian_vector_product(self, kl, damping=1e-2):
         grads = torch.autograd.grad(kl,
                                     self.policy.parameters(),
@@ -89,10 +102,15 @@ class MAMLTRPO(GradientBasedMetaLearner):
             return flat_grad2_kl + damping * vector
         return _product
 
-    async def surrogate_loss(self, train_futures, valid_futures, old_pi=None):
+    async def meta_loss(self, train_futures, valid_futures, old_pi=None):
         first_order = (old_pi is not None) or self.first_order
-        params = await self.adapt(train_futures,
-                                  first_order=first_order)
+        params = await self.adapt(train_futures,first_order=first_order)
+        #params = OrderedDict(self.policy.named_meta_parameters())   # debug
+        #params_b_tr = await self.adapt(train_futures,first_order=first_order, params=params)
+        params_a_trpo = await self.trpo_adapt(train_futures, params)
+        #params_a_trpo = self.trpo_adapt(train_futures, params)
+
+
 
         with torch.set_grad_enabled(old_pi is None):
             valid_episodes = await valid_futures
@@ -109,22 +127,44 @@ class MAMLTRPO(GradientBasedMetaLearner):
             kls = weighted_mean(kl_divergence(pi, old_pi),
                                 lengths=valid_episodes.lengths)
             # params adapt from valid_futures
-            params_b = await self.adapt(valid_futures,first_order=first_order, params=params)
+            params_b =  await self.adapt([valid_futures],first_order=first_order, params=params)
+            params_b_trpo = await self.trpo_adapt([valid_futures], params)
+            #train_episodes = await train_futures
+            #params_b_trpo = await self.trpo_adapt(train_episodes, params)
+            #params_a_trpo = await self.trpo_adapt(train_futures, params)
+            params_b_tr = await self.adapt(train_futures,first_order=first_order, params=params)
+            #params_a = await self.adapt(train_futures, first_order=first_order)
             params_meta = OrderedDict(self.policy.named_parameters())
             if arguments.args.deter_b:
                 params_b = deter_sigma(params_b)
+                params_b_trpo = deter_sigma(params_b_trpo)
 
             # meta_loss
             switcher={
+                'aq': KL(stopgrad_params(params),params_meta, self.policy.num_layers) ,
+                'aq_trpo': KL(stopgrad_params(params_a_trpo),params_meta, self.policy.num_layers) ,
+                'aq_l2': L2(stopgrad_params(params),params_meta, self.policy.num_layers) ,
                 'bq': KL(stopgrad_params(params_b),params_meta, self.policy.num_layers) ,
+                'bq_tr': KL(stopgrad_params(params_b_tr),params_meta, self.policy.num_layers) ,
+                'bq_trpo': KL(stopgrad_params(params_b_trpo),params_meta, self.policy.num_layers) ,
                 'abq': KL(stopgrad_params(params_b),params_meta, self.policy.num_layers) - KL(stopgrad_params(params),params_meta, self.policy.num_layers) ,
+                'abq_trpo': KL(stopgrad_params(params_b_trpo),params_meta, self.policy.num_layers) - KL(stopgrad_params(params),params_meta, self.policy.num_layers) ,
+                'abq_l2':  L2(stopgrad_params(params_b),params_meta, self.policy.num_layers) - L2(stopgrad_params(params),params_meta, self.policy.num_layers) ,
+                'abq_l2_trpo':  L2(stopgrad_params(params_b_trpo),params_meta, self.policy.num_layers) - L2(stopgrad_params(params),params_meta, self.policy.num_layers) ,
                 'reptile':  L2(stopgrad_params(params_b),params_meta, self.policy.num_layers) ,
+                'reptile_tr':  L2(stopgrad_params(params_b_tr),params_meta, self.policy.num_layers) ,
+                'fomaml' :  L2(stopgrad_params(params_b_tr),params_meta, self.policy.num_layers) - L2(stopgrad_params(params),params_meta, self.policy.num_layers) ,
+                'maml_trpo': -weighted_mean(ratio * valid_episodes.advantages,lengths=valid_episodes.lengths),
                 'maml': -weighted_mean(ratio * valid_episodes.advantages,lengths=valid_episodes.lengths)
             }
 
             losses = switcher[arguments.args.meta_loss]
 
         return losses.mean(), kls.mean(), old_pi
+
+
+
+
 
     def step(self,
              train_futures,
@@ -137,9 +177,9 @@ class MAMLTRPO(GradientBasedMetaLearner):
         num_tasks = len(train_futures[0])
         logs = {}
 
-        # Compute the surrogate loss
+        # Compute the surrogate loss, iterate on meta batches ?
         old_losses, old_kls, old_pis = self._async_gather([
-            self.surrogate_loss(train, valid, old_pi=None)
+            self.meta_loss(train, valid, old_pi=None)
             for (train, valid) in zip(zip(*train_futures), valid_futures)])
 
         logs['loss_before'] = to_numpy(old_losses)
@@ -152,11 +192,11 @@ class MAMLTRPO(GradientBasedMetaLearner):
         grads = parameters_to_vector(grads)
 
         # Compute the step direction with Conjugate Gradient
-        if arguments.args.meta_loss != 'maml':
+        if arguments.args.meta_op == 'sgd':
             old_params = parameters_to_vector(self.policy.parameters())
             vector_to_parameters(old_params - arguments.args.meta_lr * grads,
                                  self.policy.parameters())
-        else:
+        if arguments.args.meta_op == 'trpo':
             old_kl = sum(old_kls) / num_tasks
             hessian_vector_product = self.hessian_vector_product(old_kl,
                                                                  damping=cg_damping)
@@ -181,7 +221,7 @@ class MAMLTRPO(GradientBasedMetaLearner):
                                      self.policy.parameters())
 
                 losses, kls, _ = self._async_gather([
-                    self.surrogate_loss(train, valid, old_pi=old_pi)
+                    self.meta_loss(train, valid, old_pi=old_pi)
                     for (train, valid, old_pi)
                     in zip(zip(*train_futures), valid_futures, old_pis)])
 

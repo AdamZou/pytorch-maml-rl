@@ -36,9 +36,13 @@ def init():
     misc.add_argument('--meta_lr', type=float, default=0.001,
         help='meta learning rate')
     misc.add_argument('--meta_loss', type=str, default='maml',
+        help='meta loss type')
+    misc.add_argument('--meta_op', type=str, default='sgd',
         help='meta update algorithm type')
     misc.add_argument('--deter_b', type=bool, default=False,
         help='if true, set sigma_b to 0')
+    misc.add_argument('--stop_grad', type=bool, default=False,
+        help='if true, stop further grads when updating')
 
     args = parser.parse_args()
     args.device = ('cuda' if (torch.cuda.is_available()

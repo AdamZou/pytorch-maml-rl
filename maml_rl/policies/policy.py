@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 
 from collections import OrderedDict
+import arguments
 
 def weight_init(module):
     if isinstance(module, nn.Linear):
@@ -26,8 +27,11 @@ class Policy(nn.Module):
         if params is None:
             params = OrderedDict(self.named_meta_parameters())
 
-        grads = torch.autograd.grad(loss, params.values(),
-                                    create_graph=not first_order)
+        grads = torch.autograd.grad(loss, params.values(), create_graph=not first_order)
+
+        if arguments.args.stop_grad:
+            for grad in grads:
+                grad = grad.detach()
 
         updated_params = OrderedDict()
         for (name, param), grad in zip(params.items(), grads):
