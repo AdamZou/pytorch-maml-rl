@@ -31,8 +31,8 @@ def init():
         help='if true, use reparameterization mc in inner-update instead of vanilla')
     misc.add_argument('--prior_sigma', type=float, default=0.01,
         help='prior_sigma')
-    misc.add_argument('--fix_sigma', type=bool, default=False,
-        help='if true, fix sigma = 1.0')
+    misc.add_argument('--fix_sigma', type=float, default=-1.0,
+        help='if negative, no fix')
     misc.add_argument('--meta_lr', type=float, default=0.001,
         help='meta learning rate')
     misc.add_argument('--meta_loss', type=str, default='maml',
@@ -86,8 +86,8 @@ def test_init():
         help='determ_forward')
     misc.add_argument('--prior_sigma', type=float, default=0.01,
         help='prior_sigma')
-    misc.add_argument('--fix_sigma', type=bool, default=False,
-        help='if true, fix sigma = 1.0')
+    misc.add_argument('--fix_sigma', type=float, default=-1.0,
+        help='if negative, no fix')
 
 
     args = parser.parse_args()

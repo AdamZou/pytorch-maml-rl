@@ -106,15 +106,17 @@ class MAMLTRPO(GradientBasedMetaLearner):
         first_order = (old_pi is not None) or self.first_order
         params = await self.adapt(train_futures,first_order=first_order)
         #params = OrderedDict(self.policy.named_meta_parameters())   # debug
-        #params_b_tr = await self.adapt(train_futures,first_order=first_order, params=params)
         params_a_trpo = await self.trpo_adapt(train_futures, params)
-        #params_a_trpo = self.trpo_adapt(train_futures, params)
+        params_b_tr = await self.adapt(train_futures,first_order=first_order, params=params)
 
+
+        valid_episodes = await valid_futures
+        params_b =  await self.adapt([valid_futures],first_order=first_order, params=params)
+        params_b_trpo = await self.trpo_adapt([valid_futures], params)
 
 
         with torch.set_grad_enabled(old_pi is None):
-            valid_episodes = await valid_futures
-
+            #valid_episodes = await valid_futures
             pi = self.policy(valid_episodes.observations, params=params)
 
             if old_pi is None:
@@ -126,14 +128,7 @@ class MAMLTRPO(GradientBasedMetaLearner):
 
             kls = weighted_mean(kl_divergence(pi, old_pi),
                                 lengths=valid_episodes.lengths)
-            # params adapt from valid_futures
-            params_b =  await self.adapt([valid_futures],first_order=first_order, params=params)
-            params_b_trpo = await self.trpo_adapt([valid_futures], params)
-            #train_episodes = await train_futures
-            #params_b_trpo = await self.trpo_adapt(train_episodes, params)
-            #params_a_trpo = await self.trpo_adapt(train_futures, params)
-            params_b_tr = await self.adapt(train_futures,first_order=first_order, params=params)
-            #params_a = await self.adapt(train_futures, first_order=first_order)
+
             params_meta = OrderedDict(self.policy.named_parameters())
             if arguments.args.deter_b:
                 params_b = deter_sigma(params_b)

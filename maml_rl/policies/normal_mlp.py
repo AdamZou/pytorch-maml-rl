@@ -41,7 +41,7 @@ class NormalMLPPolicy(Policy):
 
         self.mu = bnn.BayesLinear(prior_mu=0, prior_sigma=arguments.args.prior_sigma,in_features=layer_sizes[-1], out_features=output_size)
 
-        if not arguments.args.fix_sigma:
+        if arguments.args.fix_sigma < 0:
             self.sigma = nn.Parameter(torch.Tensor(output_size))
             self.sigma.data.fill_(math.log(init_std))
 
@@ -79,9 +79,9 @@ class NormalMLPPolicy(Policy):
         mu = F.linear(output,
                       weight=weight,
                       bias=bias)
-        if not arguments.args.fix_sigma:
+        if arguments.args.fix_sigma < 0:
             scale = torch.exp(torch.clamp(params['sigma'], min=self.min_log_std))
         else:
-            scale = 1.0
+            scale = arguments.args.fix_sigma
 
         return Independent(Normal(loc=mu, scale=scale), 1)
