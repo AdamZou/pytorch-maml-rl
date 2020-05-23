@@ -82,6 +82,6 @@ class NormalMLPPolicy(Policy):
         if not arguments.args.fix_sigma:
             scale = torch.exp(torch.clamp(params['sigma'], min=self.min_log_std))
         else:
-            scale = 1.0
+            scale = 0.1 #1.0
 
         return Independent(Normal(loc=mu, scale=scale), 1)

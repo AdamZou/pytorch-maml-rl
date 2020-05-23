@@ -127,6 +127,7 @@ class MAMLTRPO(GradientBasedMetaLearner):
             kls = weighted_mean(kl_divergence(pi, old_pi),
                                 lengths=valid_episodes.lengths)
             # params adapt from valid_futures
+            '''
             params_b =  await self.adapt([valid_futures],first_order=first_order, params=params)
             params_b_trpo = await self.trpo_adapt([valid_futures], params)
             #train_episodes = await train_futures
@@ -159,6 +160,8 @@ class MAMLTRPO(GradientBasedMetaLearner):
             }
 
             losses = switcher[arguments.args.meta_loss]
+            '''
+            losses = -weighted_mean(ratio * valid_episodes.advantages,lengths=valid_episodes.lengths)
 
         return losses.mean(), kls.mean(), old_pi
 

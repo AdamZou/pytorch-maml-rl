@@ -37,12 +37,14 @@ def init():
         help='meta learning rate')
     misc.add_argument('--meta_loss', type=str, default='maml',
         help='meta loss type')
-    misc.add_argument('--meta_op', type=str, default='sgd',
+    misc.add_argument('--meta_op', type=str, default='trpo',
         help='meta update algorithm type')
     misc.add_argument('--deter_b', type=bool, default=False,
         help='if true, set sigma_b to 0')
     misc.add_argument('--stop_grad', type=bool, default=False,
         help='if true, stop further grads when updating')
+    misc.add_argument('--inner_op', type=str, default='sgd',
+        help='inner-update type')
 
     args = parser.parse_args()
     args.device = ('cuda' if (torch.cuda.is_available()
@@ -88,6 +90,10 @@ def test_init():
         help='prior_sigma')
     misc.add_argument('--fix_sigma', type=bool, default=False,
         help='if true, fix sigma = 1.0')
+    misc.add_argument('--inner_op', type=str, default='sgd',
+        help='inner-update type')
+    misc.add_argument('--stop_grad', type=bool, default=False,
+        help='if true, stop further grads when updating')
 
 
     args = parser.parse_args()

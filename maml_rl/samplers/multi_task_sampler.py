@@ -10,8 +10,9 @@ from copy import deepcopy
 from maml_rl.samplers.sampler import Sampler, make_env
 from maml_rl.envs.utils.sync_vector_env import SyncVectorEnv
 from maml_rl.episode import BatchEpisodes
-from maml_rl.utils.reinforcement_learning import reinforce_loss
+from maml_rl.utils.reinforcement_learning import reinforce_loss, trpo_update
 
+import arguments
 
 def _create_consumer(queue, futures, loop=None):
     if loop is None:
@@ -268,11 +269,15 @@ class SamplerWorker(mp.Process):
             self.train_queue.put((index, step, deepcopy(train_episodes)))
 
             with self.policy_lock:
-                loss = reinforce_loss(self.policy, train_episodes, params=params)
-                params = self.policy.update_params(loss,
-                                                   params=params,
-                                                   step_size=fast_lr,
-                                                   first_order=True)
+                if arguments.args.inner_op=='trpo':
+                    params = trpo_update(self.policy, params,train_episodes)
+
+                if arguments.args.inner_op=='sgd':
+                    loss = reinforce_loss(self.policy, train_episodes, params=params)
+                    params = self.policy.update_params(loss,
+                                                       params=params,
+                                                       step_size=fast_lr,
+                                                       first_order=True)
                 #print('updated params=',params)
 
         # Sample the validation trajectories with the adapted policy

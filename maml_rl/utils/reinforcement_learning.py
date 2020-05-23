@@ -92,8 +92,11 @@ def trpo_update(policy, old_params,future, old_pi=None,max_kl=1e-3,
 
     #num_tasks = len(future)
     #logs = {}
+    if old_params is None:
+        old_params = OrderedDict(policy.named_meta_parameters())
 
     params = OrderedDict()
+
     for (name, param) in old_params.items():
         params[name] = param.clone()
 
