@@ -43,6 +43,25 @@ def init():
         help='if true, set sigma_b to 0')
     misc.add_argument('--stop_grad', type=bool, default=False,
         help='if true, stop further grads when updating')
+    misc.add_argument('--sigma_lr', type=float, default=10.0,
+        help='learning rate of sigma')
+    misc.add_argument('--num_steps', type=int, default=1,
+        help='number of inner steps')
+    misc.add_argument('--sigma_trans', type=str, default='exp',
+        help='log sigma transform function. exp or softplus')
+    misc.add_argument('--output', type=str, default='train_results.pkl',
+        help='name of the output folder')
+    misc.add_argument('--num_batches', type=int, default=500,
+        help='number of meta steps')
+    misc.add_argument('--test_num_batches', type=int, default=10,
+        help='number of test batches')
+    misc.add_argument('--test_num_steps', type=int, default=3,
+        help='number of test steps')
+    misc.add_argument('--test_meta_batch_size', type=int, default=20,
+        help='number of test meta batches')
+    misc.add_argument('--test_output', type=str, default='test_results.pkl',
+        help='name of the test output folder')
+
 
     args = parser.parse_args()
     args.device = ('cuda' if (torch.cuda.is_available()
@@ -88,6 +107,12 @@ def test_init():
         help='prior_sigma')
     misc.add_argument('--fix_sigma', type=float, default=-1.0,
         help='if negative, no fix')
+    misc.add_argument('--num_steps', type=int, default=1,
+        help='number of inner steps')
+    misc.add_argument('--stop_grad', type=bool, default=False,
+        help='if true, stop further grads when updating')
+    misc.add_argument('--sigma_trans', type=str, default='exp',
+        help='log sigma transform function. exp or softplus')
 
 
     args = parser.parse_args()

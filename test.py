@@ -3,6 +3,7 @@ import gym
 import torch
 import json
 import numpy as np
+import pickle
 from tqdm import trange
 
 from maml_rl.baseline import LinearFeatureBaseline
@@ -59,7 +60,7 @@ def main(args):
     for batch in trange(args.num_batches):
         tasks = sampler.sample_tasks(num_tasks=args.meta_batch_size)
         train_episodes, valid_episodes = sampler.sample(tasks,
-                                                        num_steps=config['num-steps'],
+                                                        num_steps=args.num_steps, #num_steps=config['num-steps'],
                                                         fast_lr=config['fast-lr'],
                                                         gamma=config['gamma'],
                                                         gae_lambda=config['gae-lambda'],

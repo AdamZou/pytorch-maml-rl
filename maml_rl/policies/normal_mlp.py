@@ -50,13 +50,19 @@ class NormalMLPPolicy(Policy):
 
     def get_weight(self, weight_mu, weight_log_sigma, bias_mu, bias_log_sigma):
         # global args
+
+        if arguments.args.sigma_trans=='exp':
+            transform = torch.exp
+        if arguments.args.sigma_trans=='softplus':
+            transform = nn.Softplus()
+            
+
         if arguments.args.determ_forward:
-            #print('determed')
-            weight = weight_mu + torch.exp(weight_log_sigma) * 1e-9
-            bias = bias_mu + torch.exp(bias_log_sigma) * 1e-9
+            weight = weight_mu + transform(weight_log_sigma) * 1e-9
+            bias = bias_mu + transform(bias_log_sigma) * 1e-9
         else:
-            weight = weight_mu + torch.exp(weight_log_sigma) * torch.randn_like(weight_log_sigma)
-            bias = bias_mu + torch.exp(bias_log_sigma) * torch.randn_like(bias_log_sigma)
+            weight = weight_mu + transform(weight_log_sigma) * torch.randn_like(weight_log_sigma)
+            bias = bias_mu + transform(bias_log_sigma) * torch.randn_like(bias_log_sigma)
 
         return weight, bias
 

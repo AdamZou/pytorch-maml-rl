@@ -3,6 +3,7 @@ import numpy as np
 
 from torch.distributions import Categorical, Independent, Normal
 from torch.nn.utils.convert_parameters import _check_param_device
+import torch.nn as nn
 
 from torch.distributions import MultivariateNormal
 from torch.distributions.kl import kl_divergence
@@ -37,8 +38,13 @@ def get_dist(weight_mu, weight_log_sigma, bias_mu, bias_log_sigma):
 
     #weight = Independent(MultivariateNormal(loc=weight_mu, scale_tril=torch.diag_embed(torch.exp(weight_log_sigma))) ,1)
     #bias = Independent(MultivariateNormal(loc=bias_mu, scale_tril=torch.diag(torch.exp(bias_log_sigma))) ,1)
-    weight = MultivariateNormal(loc=weight_mu, scale_tril=torch.diag_embed(torch.exp(weight_log_sigma)))
-    bias = MultivariateNormal(loc=bias_mu, scale_tril=torch.diag(torch.exp(bias_log_sigma)))
+    if arguments.args.sigma_trans=='exp':
+        transform = torch.exp
+    if arguments.args.sigma_trans=='softplus':
+        transform = nn.Softplus()
+
+    weight = MultivariateNormal(loc=weight_mu, scale_tril=torch.diag_embed(transform(weight_log_sigma)))
+    bias = MultivariateNormal(loc=bias_mu, scale_tril=torch.diag(transform(bias_log_sigma)))
 
     return weight, bias
 
@@ -62,7 +68,7 @@ def KL(params_a,params_b,num_layers):
         sigma_b = params['sigma']
     kl += torch.sum(kl_divergence(weight_a,weight_b)) + torch.sum(kl_divergence(bias_a,bias_b))
     if arguments.args.fix_sigma < 0:
-        kl += torch.sum((sigma_a - sigma_b) ** 2) * 10
+        kl += torch.sum((sigma_a - sigma_b) ** 2) * arguments.args.sigma_lr
 
     return kl
 

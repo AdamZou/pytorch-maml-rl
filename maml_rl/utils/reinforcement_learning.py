@@ -41,7 +41,7 @@ def reinforce_loss(policy, episodes, params=None):
     log_probs = log_probs.view(len(episodes), episodes.batch_size)
 
     losses = -weighted_mean(log_probs * episodes.advantages,
-                            lengths=episodes.lengths)
+                            lengths=episodes.lengths) 
 
     return losses.mean()
 
