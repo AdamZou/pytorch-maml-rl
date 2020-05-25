@@ -147,8 +147,9 @@ def main(args):
 
     with open(os.path.join(args.output_folder,args.test_output), 'wb') as handle:
         pickle.dump(test_result, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        
+
     test_plot=np.mean(test_result,axis=0)
+    print('test_result=',test_plot)
     with open(os.path.join(args.output_folder,'test_plot.pkl'), 'wb') as handle:
         pickle.dump(test_plot, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
