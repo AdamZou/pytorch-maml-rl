@@ -183,7 +183,9 @@ class MAMLTRPO(GradientBasedMetaLearner):
         old_loss = sum(old_losses) / num_tasks
         grads = torch.autograd.grad(old_loss,
                                     self.policy.parameters(),
-                                    retain_graph=True)
+                                    retain_graph=True,allow_unused=True)  ########
+        #print('params=',OrderedDict(self.policy.named_parameters()))
+        #print('grads=',grads)
         grads = parameters_to_vector(grads)
 
         # Compute the step direction with Conjugate Gradient

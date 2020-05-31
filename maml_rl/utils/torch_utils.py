@@ -52,23 +52,31 @@ def get_dist(weight_mu, weight_log_sigma, bias_mu, bias_log_sigma):
 def KL(params_a,params_b,num_layers):
 
     kl = 0
+
+    if not arguments.args.continuous:
+        num_layers += 1
     for i in range(1, num_layers):
         params = params_a
         weight_a, bias_a = get_dist(params['layer{0}.weight_mu'.format(i)], params['layer{0}.weight_log_sigma'.format(i)], params['layer{0}.bias_mu'.format(i)], params['layer{0}.bias_log_sigma'.format(i)])
         params = params_b
         weight_b, bias_b = get_dist(params['layer{0}.weight_mu'.format(i)], params['layer{0}.weight_log_sigma'.format(i)], params['layer{0}.bias_mu'.format(i)], params['layer{0}.bias_log_sigma'.format(i)])
         kl += torch.sum(kl_divergence(weight_a,weight_b)) + torch.sum(kl_divergence(bias_a,bias_b))
-    params = params_a
-    weight_a, bias_a = get_dist(params['mu.weight_mu'], params['mu.weight_log_sigma'], params['mu.bias_mu'], params['mu.bias_log_sigma'])
-    if arguments.args.fix_sigma < 0:
-        sigma_a = params['sigma']
-    params = params_b
-    weight_b, bias_b = get_dist(params['mu.weight_mu'], params['mu.weight_log_sigma'], params['mu.bias_mu'], params['mu.bias_log_sigma'])
-    if arguments.args.fix_sigma < 0:
-        sigma_b = params['sigma']
-    kl += torch.sum(kl_divergence(weight_a,weight_b)) + torch.sum(kl_divergence(bias_a,bias_b))
-    if arguments.args.fix_sigma < 0:
-        kl += torch.sum((sigma_a - sigma_b) ** 2) * arguments.args.sigma_lr
+
+
+    #print(arguments.args.contin)
+    if arguments.args.continuous:
+        params = params_a
+        weight_a, bias_a = get_dist(params['mu.weight_mu'], params['mu.weight_log_sigma'], params['mu.bias_mu'], params['mu.bias_log_sigma'])
+        if arguments.args.fix_sigma < 0:
+            sigma_a = params['sigma']
+        params = params_b
+        weight_b, bias_b = get_dist(params['mu.weight_mu'], params['mu.weight_log_sigma'], params['mu.bias_mu'], params['mu.bias_log_sigma'])
+        if arguments.args.fix_sigma < 0:
+            sigma_b = params['sigma']
+        kl += torch.sum(kl_divergence(weight_a,weight_b)) + torch.sum(kl_divergence(bias_a,bias_b))
+        if arguments.args.fix_sigma < 0:
+            kl += torch.sum((sigma_a - sigma_b) ** 2) * arguments.args.sigma_lr
+
 
     return kl
 

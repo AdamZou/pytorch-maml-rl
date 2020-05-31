@@ -101,7 +101,7 @@ def main(args):
         result['train_returns'].append(np.mean(train_returns))
         result['valid_returns'].append(np.mean(valid_returns))
         #print policy params sigma
-        if arguments.args.fix_sigma < 0:
+        if (arguments.args.fix_sigma < 0) and arguments.args.continuous:
             params = OrderedDict(policy.named_parameters())
             print('sigma=',params['sigma'])
 
@@ -120,10 +120,12 @@ def main(args):
     for i in range(1, policy.num_layers):
         print('layer',i)
         print('weight_mu=',params['layer{0}.weight_mu'.format(i)], 'weight_log_sigma=',params['layer{0}.weight_log_sigma'.format(i)], 'bias_mu=',params['layer{0}.bias_mu'.format(i)], 'bias_log_sigma=',params['layer{0}.bias_log_sigma'.format(i)])
-    print('layer_last')
-    print('weight_mu=',params['mu.weight_mu'], 'weight_log_sigma=',params['mu.weight_log_sigma'],'bias_mu=', params['mu.bias_mu'], 'bias_log_sigma=',params['mu.bias_log_sigma'])
-    if arguments.args.fix_sigma < 0:
-        print('sigma=',params['sigma'])
+    #print('layer_last')
+
+    if arguments.args.continuous:
+        print('weight_mu=',params['mu.weight_mu'], 'weight_log_sigma=',params['mu.weight_log_sigma'],'bias_mu=', params['mu.bias_mu'], 'bias_log_sigma=',params['mu.bias_log_sigma'])
+        if arguments.args.fix_sigma < 0:
+            print('sigma=',params['sigma'])
 
 
     # metatest after metatrain

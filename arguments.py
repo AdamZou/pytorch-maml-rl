@@ -43,6 +43,8 @@ def init():
         help='if true, set sigma_b to 0')
     misc.add_argument('--stop_grad', type=bool, default=False,
         help='if true, stop further grads when updating')
+    misc.add_argument('--continuous', type=bool, default=True,
+        help='if true, ')
     misc.add_argument('--sigma_lr', type=float, default=10.0,
         help='learning rate of sigma')
     misc.add_argument('--num_steps', type=int, default=1,
@@ -64,6 +66,7 @@ def init():
 
 
     args = parser.parse_args()
+    print(args)
     args.device = ('cuda' if (torch.cuda.is_available()
                    and args.use_cuda) else 'cpu')
 
